@@ -13,48 +13,19 @@ const double log2pi = log(2.0 * M_PI);
 // [[Rcpp::plugins(cpp11)]]
 
 // [[Rcpp::depends(RcppArmadillo)]]
-
-
-// [[Rcpp::export]]
-double pdflogmvn1(arma::vec x,
-                  arma::vec mean,
-                  arma::mat sigma) {
-    int xdim = x.n_rows;
-    double out;
-    arma::mat temp=trimatu(arma::trans(cholmod(sigma)));
-    arma::mat tempinv;
-    if(arma::inv(tempinv,temp)==false){
-        tempinv=invuptr(temp);
-    }
-    arma::mat rooti = arma::trans(tempinv);
-    double rootisum = arma::sum(log(rooti.diag()));
-    double constants = -(static_cast<double>(xdim)/2.0) * log2pi;
-
-    arma::vec z = rooti * ( x - mean ) ;
-    out = constants - 0.5 * arma::sum(z%z) + rootisum;
-    if(arma::is_finite(out)==0){
-        out=-exp(20);
-    }
-    return(out);
-}
-
+// get eigenvalues
 // [[Rcpp::export]]
 arma::vec getEigenValuesd(arma::mat M,arma::vec psi){
 
     arma::cx_vec eigval;
     eig_gen(eigval,M);
     arma::vec ret;
-    if(eig_gen(eigval,M)== false){
-        Rcout<<psi<<endl;
-    }
-    else{
-        ret=arma::abs(eigval);
-    }
+    ret=arma::abs(eigval);
     return ret;
 }
 
 
-
+//  log gamma function
 //[[Rcpp::export]]
 double lngamma(double a) {
     Rcpp::NumericVector ar = Rcpp::wrap(a);
@@ -63,6 +34,7 @@ double lngamma(double a) {
     return lgd;
 }
 
+//log multivariate gamma function
 //[[Rcpp::export]]
 arma::vec lngammamv(arma::vec a) {
     Rcpp::NumericVector ar = Rcpp::wrap(a);
@@ -71,7 +43,7 @@ arma::vec lngammamv(arma::vec a) {
 }
 
 
-// log of the univariate t density
+// log pdf of the univariate t density
 // (y-m)/sqrt(tau2) is a classic student t distribution with d.f. nu
 // [[Rcpp::export]]
 double pdft1_(double y, double m, double tau2, double nu) {
@@ -88,7 +60,7 @@ double pdft1_(double y, double m, double tau2, double nu) {
 
 
 
-
+//generate random variables from standard normal distribution
 //[[Rcpp::export]]
 arma::colvec rnorma(int n) {
     Rcpp::RNGScope scope;
@@ -110,13 +82,10 @@ double pdft1mv(arma::vec y, arma::vec m, arma::mat P, int nu) {
     double ePe = sum(e%e);
     double ker = -a*log(1.0 + ePe/nu);
     double z = cnst + 0.5*lndet1(C) + ker;
-    if(arma::is_finite(z)==0){
-        z=-exp(20);
-    }
     return z;
 }
 
-//Siddhartha Chib
+// log multivariate t distribution
 //[[Rcpp::export]]
 double pdfmvt1(arma::colvec y, arma::colvec mu,
                arma::mat P, double nu) {
@@ -132,61 +101,16 @@ double pdfmvt1(arma::colvec y, arma::colvec mu,
 
 
 
-//[[Rcpp::export]]
-double dwish(arma::mat W, double nu, arma::mat Rinv){
-    int k = W.n_rows;
-    double c1 = -(nu*k/2)*log(2);
-    double c2 = -(k*(k-1)/4)*log(arma::datum::pi);
-    arma::vec nuvec1=arma::zeros<arma::vec>(k);
-    for(int i=0;i<k;i++){
-        nuvec1(i)=(nu-i)/2;
-    }
-    double c3 = -sum(lngammamv(nuvec1));
-    double log_detRinv;
-    double sign;
-    arma::log_det(log_detRinv,sign,Rinv);
-    double c4 = (nu/2)*log_detRinv;
-    double log_detW;
-    double sign1;
-    arma::log_det(log_detW,sign1,W);
-    double c5 = (nu-k-1)/2*log_detW;
-    double c6 = -0.5*sum(arma::diagvec(Rinv*W));
-    double lpdf = c1+c2+c3+c4+c5+c6;
-    return(lpdf);
-}
 
-
-//[[Rcpp::export]]
-double dinwish(arma::mat W, double nu, arma::mat R){
-    int k = W.n_rows;
-    double c1 = -(nu*k/2)*log(2);
-    double c2 = -(k*(k-1)/4)*log(arma::datum::pi);
-    arma::vec nuvec1=arma::zeros<arma::vec>(k);
-    for(int i=0;i<k;i++){
-        nuvec1(i)=(nu-i)/2;
-    }
-    double c3 = -sum(lngammamv(nuvec1));
-    double log_detR;
-    double sign;
-    arma::log_det(log_detR,sign,R);
-    double c4 = (nu/2)*log_detR;
-    double log_detW;
-    double sign1;
-    arma::log_det(log_detW,sign1,W);
-    double c5 = -(nu+k+1)/2*log_detW;
-    double c6 = -0.5*sum(arma::diagvec(R*arma::inv(W)));
-    double lpdf = c1+c2+c3+c4+c5+c6;
-    return(lpdf);
-}
-
-
-
+// log det
 //[[Rcpp::export]]
 double lndet1(arma::mat C){
     double ret = 2.0*sum(log(diagvec(C)));
     return ret;
 }
 
+
+//pdf for beta distribution
 // [[Rcpp::export]]
 double lnpdfbeta(double p, double a, double b){
     double retf = lngamma(a+b)-lngamma(a)-lngamma(b);
@@ -195,15 +119,12 @@ double lnpdfbeta(double p, double a, double b){
 }
 
 
-
-
 //log of the inverse gamma density function
 //sig2 is the scalar (positive) value of the random variable
 //v is the first parameter of the IG density
 //d is the second parameter, mean is d/v
 //in wikipedia, v is alpha(shape parameter) and d is beta(scale parameter)
 //log of the IG density at sig2
-//Siddhartha Chib
 // [[Rcpp::export]]
 double pdfig1(double sig2, double v, double d) {
     double c = v * log(d) - lngamma(v);
@@ -212,19 +133,7 @@ double pdfig1(double sig2, double v, double d) {
 }
 
 
-// [[Rcpp::export]]
-int equalsample_(int n) {
-    Rcpp::RNGScope scope;
-    Rcpp::IntegerVector rx = seq_len(n);
-    Rcpp::NumericVector rprob = Rcpp::NumericVector::create();
-    Rcpp::IntegerVector ret = Rcpp::RcppArmadillo::sample(rx, 1, true, rprob);
-    int a;
-    a = ret[0];
-    //a = rx[0];
-    return a;
-
-}
-
+//generate random variable from uniform distribution
 //[[Rcpp::export]]
 arma::vec randitg(int m, int n){
     arma::vec temp = arma::randu(n,1);
@@ -232,7 +141,10 @@ arma::vec randitg(int m, int n){
     arma::vec ret = temp%temp1;
     return(arma::ceil(ret));
 
+  
 }
+
+// sample with replacement
 // [[Rcpp::export]]
 Rcpp::IntegerVector multisample(int nmh, int n){
 
@@ -246,6 +158,7 @@ Rcpp::IntegerVector multisample(int nmh, int n){
 }
 
 
+// log pdf inverse gamma
 //[[Rcpp::export]]
 arma::vec pdfig1mv(arma::vec sig2, arma::vec v, arma::vec d){
     arma::vec c = v% log(d) - lngammamv(v);
@@ -253,6 +166,7 @@ arma::vec pdfig1mv(arma::vec sig2, arma::vec v, arma::vec d){
     return lpdf;
 }
 
+// uniform distribution
 //[[Rcpp::export]]
 double rndu_() {
     Rcpp::RNGScope scope;
@@ -263,6 +177,7 @@ double rndu_() {
     return a;
 }
 
+//univariate normal random variables
 // [[Rcpp::export]]
 double rndn_() {
     Rcpp::RNGScope scope;
@@ -296,6 +211,8 @@ double rta(double nu, double m, double V){
     return z;
 }
 
+
+//random variables from inverse gamma
 //[[Rcpp::export]]
 arma::colvec rigamman(int n, double a, double b) {
     Rcpp::RNGScope scope;
@@ -304,6 +221,7 @@ arma::colvec rigamman(int n, double a, double b) {
     return av;
 }
 
+//univariate inverse gamma 
 //[[Rcpp::export]]
 double rigamma(double a, double b) {
     Rcpp::RNGScope scope;
@@ -312,6 +230,7 @@ double rigamma(double a, double b) {
     return av(0);
 }
 
+//chisquare
 // [[Rcpp::export]]
 double rchisqs(double nu) {
     Rcpp::RNGScope scope;
@@ -320,6 +239,7 @@ double rchisqs(double nu) {
     return aj;
 }
 
+// multivariate t
 // [[Rcpp::export]]
 arma::colvec rmvta(double nu, arma::colvec m, arma::mat V) {
     int k = m.n_rows;
@@ -344,7 +264,7 @@ Rcpp::List reparaig(double s2mean, double s2sd){
 
 
 
-
+// cholesck decomposition
 // [[Rcpp::export]]
 arma::mat cholmod(arma::mat A){
     int n = A.n_rows;
@@ -453,6 +373,7 @@ arma::mat invpd(arma::mat A){
     return(Ainv);
 }
 
+//column mean
 //[[Rcpp::export]]
 arma::vec col_means(arma::mat A){
     int nCols = A.n_cols;
@@ -464,6 +385,7 @@ arma::vec col_means(arma::mat A){
     return out;
 }
 
+// row mean
 //[[Rcpp::export]]
 arma::vec row_means(arma::mat A){
     int nRows = A.n_rows;
@@ -475,6 +397,7 @@ arma::vec row_means(arma::mat A){
     return out;
 }
 
+//log pdf normal distribution
 // [[Rcpp::export]]
 double pdflogmvn(arma::vec x,
                  arma::vec mean,
@@ -491,40 +414,9 @@ double pdflogmvn(arma::vec x,
 }
 
 
-//[[Rcpp::export]]
-arma::mat test(arma::mat A){
-    arma::mat B = trimatu(A);
-    return B;
-}
 
 
-//[[Rcpp::export]]
-arma::mat rwish(double nu,arma::mat R){
-    int p = R.n_rows;
-    arma::mat T = arma::zeros<arma::mat>(p,p);
-    int i = 0;
-    while(i<p){
-        int j = 0;
-        while(j<=i){
-            if(i==j){
-                T(i,j)=sqrt(rchisqs(nu-i+1));
-
-            }
-            else{
-                T(i,j)=rndn_();
-            }
-            j=j+1;
-        }
-        i=i+1;
-    }
-    arma::mat A = T*arma::trans(T);
-    arma::mat C = cholmod(R);
-    arma::mat W=arma::trans(C)*A*C;
-    return(W);
-    }
-
-
-
+//log pdf mean
 //[[Rcpp::export]]
 double pdfavg(arma::vec pdfthm){
     double thmax = max(pdfthm);
@@ -535,88 +427,7 @@ double pdfavg(arma::vec pdfthm){
     return(pdfth);
 }
 
-
-
-
-
-// [[Rcpp::export]]
-arma::uvec std_setdiff(arma::uvec& x, arma::uvec& y) {
-
-    std::vector<int> a = arma::conv_to< std::vector<int> >::from(arma::sort(x));
-    std::vector<int> b = arma::conv_to< std::vector<int> >::from(arma::sort(y));
-    std::vector<int> out;
-
-    std::set_difference(a.begin(), a.end(), b.begin(), b.end(),
-                        std::inserter(out, out.end()));
-
-    return arma::conv_to<arma::uvec>::from(out);
-}
-
-
-//[[Rcpp::export]]
-Rcpp::List mvt_sub(arma::uvec indbj, arma::vec x2, arma::vec mu,arma::mat Sigma,double v,List Spec){
-    arma::uvec indRB = Spec["indRB"];
-    int dim = indRB.n_rows;
-    double v1 = v;
-    arma::mat Sigma1;
-    arma::mat Sigma22;
-    arma::vec mu1;
-    //arma::uvec temp=arma::regspace<arma::uvec>(1,1,dim);
-    arma::uvec indbj2 = std_setdiff(indRB,indbj);
-    if(indbj.n_rows+indbj2.n_rows>dim){
-        Rcout<<"parameter index incorrectly specified"<<endl;
-    }
-
-    if(indbj.is_empty()==true){
-        arma::vec mu1 = mu.rows(indbj-1);
-        Sigma1 = Sigma.submat(indbj-1,indbj-1);
-        v1 = v;
-    }else{
-        arma::mat Sigma11= Sigma.submat(indbj-1,indbj-1);
-        arma::mat Sigma12= Sigma.submat(indbj-1,indbj2-1);
-        Sigma22=Sigma.submat(indbj2-1,indbj2-1);
-        mu1 = mu.rows(indbj-1)+arma::trans(arma::trans(x2-mu.rows(indbj2-1))*arma::inv(Sigma22)*arma::trans(Sigma12));
-        //Sigma1 = Sigma11-Sigma12*arma::inv(Sigma22)*arma::trans(Sigma12);
-        //v1=v+indbj2.n_rows;
-        //arma::mat temp3=arma::trans(x2-mu.rows(indbj2-1))*arma::inv(Sigma22)*(x2-mu.rows(indbj2-1));
-        //Sigma1=(temp3(0)+v)/v1*Sigma1;
-    }
-
-
-
-    return Rcpp::List::create(Rcpp::Named("mu1") = mu1);
-}
-
-//[[Rcpp::export]]
-arma::mat bfgsi(arma::mat H0,arma::vec dg,arma::vec dx){
-    arma::mat Hdg = H0*dg;
-    arma::mat temp = arma::trans(dg)*dx;
-    arma::mat  temp1=arma::trans(dg)*Hdg;
-    arma::mat H;
-
-    double dgdx = temp(0);
-    double dgHdg = temp1(0);
-    if(abs(dgdx)>1e-12){
-        H=H0+(1+dgHdg/dgdx)*(dx*arma::trans(dx))/dgdx-(dx*arma::trans(Hdg)+Hdg*arma::trans(dx))/dgdx;
-    }
-    else{
-        H=H0;
-    }
-    return H;
-}
-
-
-//[[Rcpp::export]]
-arma::mat rnormmat(int m,int n){
-    arma::mat A = arma::zeros<arma::mat>(m,n);
-    for(int i=0;i<m;i++){
-
-        A.row(i)=as<arma::rowvec>(rnorm(n));
-    }
-
-    return(A);
-}
-
+// parameter transformation
 //[[Rcpp::export]]
 arma::vec ParTran(arma::vec par, arma::vec lb, arma::vec ub, double chi, int con_unc){
 
