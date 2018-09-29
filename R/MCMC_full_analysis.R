@@ -1,4 +1,6 @@
-MCMC_real_data_analysis=function(relevant_factor=relevant_factor,
+##full MCMC analysis for Affine term structure models(including sampling of parameters and marginal likelihood computation
+
+MCMC_full_analysis=function(relevant_factor=relevant_factor,
                            irrelevant_factor=irrelevant_factor,
                            dat=dat,
                            nu=nu,
