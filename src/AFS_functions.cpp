@@ -85,57 +85,6 @@ double Kalman(arma::vec a, arma::mat b, arma::mat G,arma::mat Q, arma::mat Sigma
 }
 
 
-// [[Rcpp::export]]
-double Kalman2(arma::vec a, arma::mat b, arma::mat G,arma::mat Q, arma::mat Sigma,arma::mat ym){
-    int T = ym.n_rows;
-    int ntaum = ym.n_cols;
-    int km = G.n_rows;
-    arma::vec zerom=arma::zeros<arma::vec>(ntaum);
-    arma::vec f_ll=arma::zeros<arma::vec>(km);
-    arma::mat P_ll=makeR0cpp(G,Q);
-    arma::mat ek= arma::eye<arma::mat>(km,km);
-    arma::mat var_tl;
-    arma::mat P_tl;
-    arma::mat P_tt;
-    arma::vec f_tl;
-    arma::vec f_tt;
-    arma::vec e_tl;
-    arma::mat Kalgain;
-    double lnL=0;
-
-    for(int t=0;t<T;t++ ){
-        f_tl = G*f_ll;
-        P_tl = G*P_ll*arma::trans(G) + Q;
-        var_tl = Sigma + b*P_tl*arma::trans(b);
-        var_tl = 0.5*(var_tl + arma::trans(var_tl));
-        e_tl = arma::trans(ym.row(t)) - a - b*f_tl;
-        Kalgain = P_tl*arma::trans(b);
-        arma::mat var_tlinv;
-        if(arma::inv(var_tlinv,var_tl)==false){
-            var_tlinv=invpd(var_tl);
-        }
-        Kalgain = Kalgain*var_tlinv;
-        f_tt = f_tl + Kalgain*e_tl;
-        P_tt = (ek - Kalgain*b)*P_tl;
-        arma::mat sigma11=var_tl.submat(0,0,7,7);
-        arma::mat sigma22=var_tl.submat(8,8,15,15);
-        arma::mat sigma12=var_tl.submat(0,8,7,15);
-        arma::mat sigma21=var_tl.submat(8,0,15,7);
-        arma::vec yield_mean=sigma12*arma::inv(sigma22)*e_tl.rows(8,15);
-        arma::mat sigma=sigma11-sigma12*arma::inv(sigma22)*sigma21;
-     //lnL = lnL + pdflogmvn(e_tl.rows(0,7),zerom.rows(0,7),var_tl.submat(0,0,7,7));
-     lnL = lnL + pdflogmvn(e_tl.rows(0,7),yield_mean,sigma);
-        f_ll = f_tt;
-        P_ll = P_tt;
-    }
-
-    return(lnL);
-}
-
-
-
-
-
 //[[Rcpp::export]]
 arma::vec makeKcpp(arma::vec theta,List Spec){
     arma::uvec indK=Spec["indK"];
@@ -354,164 +303,9 @@ double maker2(int t, List Spec){
 
 
 
-//[[Rcpp::export]]
-List Gen_Fmcpp2(arma::vec psi,arma::mat Fm0,int ind_tsm,List Spec){
-    arma::mat ym = Spec["ym"];
-    arma::uvec tau = Spec["tau"];
-    arma::vec tau1=Spec["tau"];
-    //arma::uvec indSig=Spec["indSig"];
-    int lm = Spec["lm"];
-    int l = Spec["l"];
-    int z =Spec["z"];
-    int lmz = Spec["lmz"];
-    int m = lm-l;
-    int ntau = tau.n_rows;
 
 
-    //preparation
-    arma::vec theta = makeThetacpp(psi, Spec);
-    arma::vec Lambda0 = makeLambda0cpp(theta, Spec);
-    double delta = makeDeltacpp(theta, Spec);
-
-    arma::mat G = makeGcpp(theta,Spec);
-    arma::mat V = makeVcpp(theta, Spec);
-    arma::mat Gam = makeGammacpp(theta, Spec);
-    arma::mat Q = makeOmegacpp(V, Gam);
-    arma::mat Ll=makeLlcpp(Q,Spec);
-    arma::mat GQll = makeGQllcpp(theta, G, Spec);
-    arma::vec beta  = makeBetacpp(theta, Spec);
-    arma::mat Sigma = makeSigmacpp(theta, Spec);
-    List AB=makeABcpp(delta,GQll,beta,Ll,Lambda0,tau,tau1,Spec);
-    arma::vec a=as<arma::vec>(AB["a"]);
-    arma::vec A=as<arma::vec>(AB["A"]);
-    arma::mat b=as<arma::mat>(AB["b"]);
-    arma::mat B=as<arma::mat>(AB["B"]);
-
-    arma::vec f_tt;
-    arma::mat P_tt;
-    int T = ym.n_rows;
-    //T=1;
-    arma::cube f_ttm = arma::cube(lmz,1,T);
-    f_ttm.fill(0);
-    arma::cube P_ttm = arma::cube(lmz,lmz,T);
-    P_ttm.fill(0);
-    arma::vec f_ll=arma::zeros<arma::vec>(lmz);
-    arma::mat P_ll=makeR0cpp(G,Q);
-    for (int j=0;j<T;j++){
-
-        arma::vec f_tl=G*f_ll;
-        arma::mat P_tl=G*P_ll*arma::trans(G)+Q;
-        arma::mat var_tl=b*P_tl*arma::trans(b)+Sigma;
-        var_tl=0.5*(var_tl+arma::trans(var_tl));
-        arma::mat var_tlinv;
-        if(arma::inv(var_tlinv,var_tl)==false){
-            var_tlinv=invpd(var_tl);
-        }
-        arma::vec e_tl=arma::trans(ym.row(j))-a-b*f_tl;
-        //arma::vec e_tl=as<arma::vec>(rnorm(ntau))%theta.rows(indSig-1);
-        arma:: mat Kalgain=P_tl*arma::trans(b)*var_tlinv;
-
-
-        arma:: vec f_tt=f_tl+Kalgain*e_tl;
-        arma::mat P_tt=arma::zeros<arma::mat>(lmz,lmz);
-        arma::mat temp =(arma::eye<arma::mat>(lmz,lmz)-Kalgain*b)*P_tl;
-        P_tt.submat(0,0,l-1,l-1)=temp.submat(0,0,l-1,l-1);
-
-
-        if(m>0){
-            arma::mat macron=ym.cols(ntau,ntau+m+z-1);
-            f_tt.rows(l,lmz-1)=arma::trans(macron.row(j));
-
-        }
-
-        f_ttm.slice(j)=f_tt;
-        P_ttm.slice(j)=P_tt;
-
-        f_ll=f_tt;
-        P_ll=P_tt;
-    }
-
-    //backward recursion
-    arma::mat Fm=arma::zeros<arma::mat>(T,lmz);
-    P_tt=P_ttm.slice(T-1);
-    arma::mat P_tt1=(P_tt+arma::trans(P_tt))/2;
-    arma::mat cP_tt=cholmod(P_tt1.submat(0,0,l-1,l-1));
-    f_tt=f_ttm.slice(T-1);
-    arma::vec f_t=f_tt;
-    arma::vec e = arma::randn(l);
-    f_t.rows(0,l-1)=f_tt.rows(0,l-1)+cP_tt*e;
-    Fm.row(T-1)=arma::trans(f_t);
-    int t=T-1;
-    while(t>0){
-        f_tt=f_ttm.slice(t-1);
-        P_tt=P_ttm.slice(t-1);
-
-        arma::mat GPG_Q=G*P_tt*arma::trans(G)+Q; //k by k
-
-
-        GPG_Q=(GPG_Q+arma::trans(GPG_Q))/2;
-        arma::mat GPG_Qinv;
-        if(arma::inv(GPG_Qinv,GPG_Q)==false){
-            GPG_Qinv=invpd(GPG_Q);
-        }
-
-
-        arma::vec e_tl=arma::trans(Fm.row(t))-G*f_tt;//
-        arma::mat PGG=P_tt*arma::trans(G)*GPG_Qinv;
-        arma::vec f_tt1=f_tt+PGG*e_tl;
-
-        if(m+z>0){
-            f_tt1.rows(l,lmz-1)=f_tt.rows(l,lmz-1);
-
-        }
-
-        arma::mat PGP=PGG*G*P_tt; //k3 by k3
-        arma::mat P_tt1=P_tt-PGP;
-        P_tt1=(P_tt1+arma::trans(P_tt1))/2;
-
-        arma::mat cP_tt1=cholmod(P_tt1.submat(0,0,l-1,l-1));
-        arma::vec ft=f_tt1;
-        ft.rows(0,l-1)=f_tt1.rows(0,l-1)+cP_tt1*arma::randn(l);
-        Fm.row(t-1)=arma::trans(ft);
-        t=t-1;
-    }
-    if(arma::is_finite(Fm)<0.5){
-        Fm=Fm0;
-    }
-    //make premium
-    arma::mat Risk_tsm=arma::zeros<arma::mat>(Fm.n_rows,ntau-1);
-    if(ind_tsm>0.5){
-        for(int t=0;t<Fm.n_rows;t++){
-            arma::vec fl=arma::trans(Fm.row(t));
-            arma::vec ft=G*fl;
-            arma::vec exr=arma::zeros<arma::vec>(max(tau)-1);
-         double rt=maker(delta,beta,fl,Spec);
-           //double rt=maker2(t,Spec);
-            for(int indtau=1;indtau<max(tau);indtau++){
-                arma::vec temp=arma::trans(B.col(indtau))*fl.rows(0,l-1)-arma::trans(B.col(indtau-1))*ft.rows(0,l-1);
-                exr(indtau-1)=A(indtau)-A(indtau-1)+temp(0)-rt;
-            }
-
-            for(int indtau=1;indtau<tau.n_rows;indtau++){
-                int ind = tau(indtau)-1;
-                Risk_tsm(t,indtau-1)=sum(exr.rows(0,ind-1))/ind;
-            }
-
-        }
-    }
-    return (Rcpp::List::create(Rcpp::Named("Fm") = Fm,
-                               Rcpp::Named("a") = a,
-                               Rcpp::Named("b") = b,
-                               Rcpp::Named("Risk_tsm")=Risk_tsm));
-
-}
-
-
-
-
-
-
-//basis yields method
+//Generate laten factor using basis yields method
 //[[Rcpp::export]]
 List Gen_Fmcpp(arma::vec psi,arma::mat Fm0,int ind_tsm,List Spec){
     arma::mat ym = Spec["ym"];
@@ -641,7 +435,7 @@ List Gen_Gcpp(arma::vec psi,arma::mat Fm, List Spec){
 
 
 
-
+//compute likelihood
 //[[Rcpp::export]]
 double lnL(arma::vec psi, List Spec){
 
@@ -965,6 +759,7 @@ arma::vec Gradpnew1(arma::vec psi0,arma::uvec indbj,List Spec){
 }
 
 
+//newton optimization algorithm
 //[[Rcpp::export]]
 arma::vec DO_CKR2(arma::vec psi0,arma::uvec indbj,int maxiter,List Spec){
     arma::vec psi1 = psi0;
@@ -1078,7 +873,7 @@ arma::vec recserar(arma::vec x, double y0, double a){
     return(y);
 }
 
-
+//simulated anealing optimation algorithm
 //[[Rcpp::export]]
 arma::vec SA_CRK2(arma::vec psi0,arma::uvec indbj,List Spec,int n,double IT,
                   double a,double b,int IM,int mr,arma::vec SF,double eps,double cs){
@@ -1184,6 +979,8 @@ arma::vec SA_CRK2(arma::vec psi0,arma::uvec indbj,List Spec,int n,double IT,
     return(argg);
 }
 
+
+//proposal distribution for TaRB
 //[[Rcpp::export]]
 Rcpp::List Gen_proposal_TaRB(arma::vec psi,arma::uvec indbj, int nu, List Spec, List Control){
     int n =as<int>(Control["n"]);
@@ -1206,6 +1003,7 @@ Rcpp::List Gen_proposal_TaRB(arma::vec psi,arma::uvec indbj, int nu, List Spec, 
 
 }
 
+//MH-algorithm
 //[[Rcpp::export]]
 Rcpp::List mhstep(arma::vec psi, arma::uvec indbj,int nu, List Spec, List Control){
     double lnlik0 = lnL(psi,Spec);
@@ -1221,11 +1019,6 @@ Rcpp::List mhstep(arma::vec psi, arma::uvec indbj,int nu, List Spec, List Contro
     int valid1=1;
     int valid2=1;
     int valid;
-    if(arma::inv(V,inV)==false){
-        V=invpd(inV);
-        valid1 = 0;
-        Rcout<<inV<<endl;
-    }
 
     arma::vec theta=psimx.rows(indbj-1);
     arma::vec t_var = rmvta(nu,theta,V);
@@ -1245,7 +1038,6 @@ Rcpp::List mhstep(arma::vec psi, arma::uvec indbj,int nu, List Spec, List Contro
             lnlik0=lnlik1;
             lnpost0=lnpost1;
             accept=1;
-            //Rcout<<"accept"<<endl;
             return Rcpp::List::create(Rcpp::Named("psi") = psi1,
                                       Rcpp::Named("accept")=accept,
                                       Rcpp::Named("lnpost")=lnpost0);
@@ -1268,7 +1060,7 @@ Rcpp::List mhstep(arma::vec psi, arma::uvec indbj,int nu, List Spec, List Contro
 }
 
 
-
+//random block
 //[[Rcpp::export]]
 arma::uvec rndper(arma::uvec y){
     int n = y.n_elem;
@@ -1288,7 +1080,7 @@ arma::uvec rndper(arma::uvec y){
 }
 
 
-
+//random block
 //[[Rcpp::export]]
 Rcpp::List randupp(int nmh, double tp){
     arma::uvec upps;
@@ -1583,7 +1375,7 @@ double pdfnumerator(arma::vec psi,arma:: vec tranpsim, arma::uvec block,arma::ma
 
 
 
-
+//MCMC for sampling and marginal likelihood computation
 //[[Rcpp::export]]
 Rcpp::List MCMC_main(arma::vec psi0, List Spec, List Control, double tp, int n0, int n1,int J1,int J2,int B){
 
@@ -1944,7 +1736,7 @@ Rcpp::List MCMC_main(arma::vec psi0, List Spec, List Control, double tp, int n0,
 
 }
 
-
+//MCMC without computing marginal likelihood
 //[[Rcpp::export]]
 Rcpp::List MCMC_main1(arma::vec psi0, List Spec, List Control, double tp, int n0, int n1,int J1,int J2,int B){
 
@@ -2090,7 +1882,7 @@ Rcpp::List MCMC_main1(arma::vec psi0, List Spec, List Control, double tp, int n0
 }
 
 
-
+//MCMC for marginal computation
 //[[Rcpp::export]]
 Rcpp::List MCMC_main2(arma::vec tranpsim, arma::mat posterior, List Spec, List Control, double tp,int J1,int J2,int B){
 
@@ -2363,7 +2155,7 @@ Rcpp::List MCMC_main2(arma::vec tranpsim, arma::mat posterior, List Spec, List C
 }
 
 
-//get one draw for vector y
+//generarate yield prediction
 //[[Rcpp::export]]
 List yield_prediction(arma::mat Fm,arma::vec psi,arma::vec realized_yc,List Spec){
 
@@ -2404,13 +2196,13 @@ List yield_prediction(arma::mat Fm,arma::vec psi,arma::vec realized_yc,List Spec
     //double pred_density = pdflogmvn(realized_yc,mean_ycf,var_ycf1);
     double pred_density = pdflogmvn(realized_yc.rows(0,ntau-1),yield,var_ycf1.submat(0,0,ntau-1,ntau-1));
     //Rcout<<realized_yc.rows(0,ntau-1)<<endl;
-    //Rcout<<yield<<endl;
     return Rcpp::List::create(Rcpp::Named("yield") = yield,
                               Rcpp::Named("pred_density")=pred_density);
 
 }
 
 
+//compute predictive likelihood
 //[[Rcpp::export]]
 List post_predictive(arma::vec psi0, arma::vec realized_yc, List Spec, List Control, double tp, int n0, int n1){
 
@@ -2538,58 +2330,6 @@ List post_predictive(arma::vec psi0, arma::vec realized_yc, List Spec, List Cont
                               Rcpp::Named("lnPPLm")=lnPPLm);
 
 
-}
-
-
-//[[Rcpp::export]]
-arma::mat simulation_test1(arma::vec psi,List Spec,int t1){
-    int lmz = Spec["lmz"];
-    arma::vec tau = Spec["tau"];
-    arma::uvec tau1 = Spec["tau1"];
-    int l = Spec["l"];
-    int m = Spec["m"];
-    int z = Spec["z"];
-    int ntau = tau.n_rows;
-    arma::uvec indn = Spec["indn"];
-    arma::uvec indSig=Spec["indSig"];
-    arma::uvec indRB = Spec["indRB"];
-    arma::uvec indV = Spec["indV"];
-    arma::uvec indGam = Spec["indGamma"];
-    arma::vec mu = Spec["mu_"];
-    arma::vec Var= Spec["Var_"];
-    arma::vec nuSig_=Spec["nuSig_"];
-    arma::vec dSig_=Spec["dSig_"];
-    arma::vec dV_=Spec["dV_"];
-    arma::vec nuV_=Spec["nuV_"];
-    arma::mat ym_new = arma::zeros(t1,ntau+m+z);
-    arma::vec f0 = arma::zeros<arma::vec>(lmz);
-    arma::vec macro0;
-    arma::vec yield0;
-    for(int i=0;i<t1;i++){
-        arma::vec theta = makeThetacpp(psi, Spec);
-        arma::vec Lambda0 = makeLambda0cpp(theta, Spec);
-        double delta = makeDeltacpp(theta, Spec);
-        arma::mat G = makeGcpp(theta,Spec);
-        arma::mat V = makeVcpp(theta, Spec);
-        arma::mat Gam = makeGammacpp(theta, Spec);
-        arma::mat Q = makeOmegacpp(V, Gam);
-        arma::mat Ll=makeLlcpp(Q,Spec);
-        arma::mat GQll = makeGQllcpp(theta, G, Spec);
-        arma::vec beta  = makeBetacpp(theta, Spec);
-        arma::mat Sigma = makeSigmacpp(theta,Spec);
-        arma::mat Sigma1=Sigma.submat(0,0,ntau-1,ntau-1);
-        List AB=makeABcpp(delta,GQll,beta,Ll,Lambda0,tau1,tau,Spec);
-        arma::vec a=as<arma::vec>(AB["a"]);
-        arma::mat b=as<arma::mat>(AB["b"]);
-        arma::mat Q2=cholmod(Q);
-        arma::vec f1=G*f0+Q2*as<arma::vec>(rnorm(lmz));
-        macro0=f1.rows(l,l+m+z-1);
-        arma::vec temp2=a+b*f1;
-        f0=f1;
-        yield0=temp2.rows(0,ntau-1)+theta.rows(indSig-1)%as<arma::vec>(rnorm(ntau));
-        ym_new.row(i)= arma::trans(arma::join_cols(yield0,macro0));
-    }
-    return(ym_new);
 }
 
 
